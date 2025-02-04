@@ -79,40 +79,43 @@ nyc_water <- area_water("NY", c("New York",
                                 "Richmond County"))
 ```
 
+Plot data using ggplot2
 ```{r}
 ggplot(incmedhh_2015) +
-  # income data
+  # Income data
   geom_sf(alpha = 1, 
           color = NA, 
           aes(fill = estimate)) +
-  # removes cartographic background grid & axis labels
+  # Theme removes cartographic background grid & axis labels
   theme_void() +
-  # legend
+  # Legend
   scale_fill_viridis_c(labels = scales::label_dollar(),
                        name = "Median Household Income") + 
-  # remove water layer by setting color to white
+  # Remove water layer by setting color to white
   geom_sf(data = nyc_water, 
           fill = "white",
           color = NA, 
           aes(geometry = geometry)) +
-  # set background to white
+  # Set background to white to match water layer
   theme(panel.background = element_rect(fill = "white", 
                                         color = NA)) 
 ```
 
 # Interactive maps
-Create interactive maps using leaflet and ggiraph
+Create interactive maps using leaflet and ggiraph packages
 
 ## leaflet
 ```{r}
-# set palette argument
+# Set color palette argument
 pal <- colorNumeric(
   palette = "magma",
   domain = incmedhh_2015$estimate
 )
 
+# Plot
 leaflet() %>% 
-  addProviderTiles(providers$CartoDB.Positron) %>%  #can choose different base map types, but can run without
+  #providers argument sets map background. Chose one of the free versions available through leaflet
+  addProviderTiles(providers$CartoDB.Positron) %>%   
   addPolygons(data = incmedhh_2015,
               color = ~pal(estimate),
               weight = 0.5,
@@ -122,19 +125,21 @@ leaflet() %>%
 ```
 
 ## ggiraph
+ggiraph is a package that makes ggplot2 figures interactve. Use the basic code set up from the original static ggplot2 map for this section and edit as needed.
 ```{r}
-# add column to create hover over text
+# Create new df that has a text column combining each tract name and the income amount (i.e. "[TRACT NAME]: [$ AMOUNT]"). This will appear when cursor hovers over each tract
 incmedhh_2015_ggir <- incmedhh_2015 %>% 
   mutate(tooltip = paste(NAME, estimate, sep = ": "))
 
+# Plot with ggiraph
 ggir <- ggplot(incmedhh_2015_ggir, aes(fill = estimate)) +
   
-  # follow same set up as ggplot2 static map, but with interactive functions
+  # Follow same set up as ggplot2 static map, but with interactive version of ggplot2 functions
   geom_sf_interactive(aes(tooltip = tooltip, data_id = NAME), 
                       size = 0.1) + 
   scale_fill_viridis_c_interactive(option = "plasma",
                                    labels = scales::label_dollar()) +
-  # color water layer white
+  # Color water layer white
   geom_sf(data = nyc_water, 
           fill = "white",
           color = NA, 
@@ -142,13 +147,15 @@ ggir <- ggplot(incmedhh_2015_ggir, aes(fill = estimate)) +
   labs(title = "Median Household Income by Census Tract",
        caption = "Data source: 2015 5-year ACS, US Census Bureau",
        fill = "ACS estimate") +
+  # Theme removes cartographic background grid & axis labels
   theme_void() +
-  # set background white to match water layer
+  # Set background white to match water layer
   theme(panel.background = element_rect(fill = "white", 
                                         color = NA)) 
 
+# Output
 girafe(ggobj = ggir) %>% 
-  # fill tract with color when cursor hovers over
+  # Fill tract with select color when cursor hovers over it
   girafe_options(opts_hover(css = "fill:cyan;"),
                  opts_zoom(max = 10))
 ```
@@ -156,15 +163,21 @@ girafe(ggobj = ggir) %>%
 # Multi-year interactive map
 Create interactive map that uses data from multiple years from the ACS-5 survey
 ```{r}
+# Save years of interest to list
 years <- lst(2010, 2015, 2020)
 
+# Run function to load census data across years in list
 incmedhh_all <- map_dfr(
   years,
   ~ get_acs(
     geography = "tract",
     variables = "B19113_001",
     state = "NY",
-    county = c("New York", "Kings", "Queens", "Bronx", "Richmond County"),
+    county = c("New York", 
+               "Kings", 
+               "Queens", 
+               "Bronx", 
+               "Richmond County"),
     year = .x,
     survey = "acs5",
     geometry = T
@@ -177,12 +190,16 @@ incmedhh_all <- map_dfr(
 ## Shiny
 Create interactive dashboard with Shiny to look at multi-year data using ggiraph package
 ```{r}
+# Create text column for hover over feature
 incmedhh_all_ggir <- incmedhh_all %>% 
   mutate(tooltip = paste(NAME, estimate, sep = ": "))
 ```
 
 ```{r}
+# Shiny setup
+
 ui <- fluidPage(
+  # Create sidebar with dropdown menu to select year
   sidebarLayout(
     sidebarPanel = sidebarPanel(
       selectInput(
@@ -200,16 +217,19 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   
   # Reactive function that filters by year based on input
-  dat_year <- reactive({incmedhh_all_ggir |> filter(year == input$selected_year)})
+  dat_year <- reactive({incmedhh_all_ggir |> 
+      filter(year == input$selected_year)})
   
   output$girafe_output <- renderGirafe({
     
-    ggir_all <- ggplot(data = dat_year(), aes(fill = estimate)) +
+    # ggiraph/ggplot2 code (same setup as the previous sections)
+    ggir_all <- ggplot(data = dat_year(), 
+                       aes(fill = estimate)) +
       geom_sf_interactive(aes(tooltip = tooltip, data_id = NAME), 
                          size = 0.1) +
       scale_fill_viridis_c_interactive(option = "plasma",
                                        labels = scales::label_dollar()) +
-      # color water layer white
+      # Color water layer white
       geom_sf(data = nyc_water, 
               fill = "white",
               color = NA, 
@@ -217,22 +237,20 @@ server <- function(input, output, session) {
       labs(title = "Median Household Income by Census Tract",
            caption = "Data source: 5-year ACS, US Census Bureau",
            fill = "ACS estimate") +
+      # Theme removes cartographic background grid & axis labels
       theme_void() + 
-        # set background white to match water layer
+        # Set background white to match water layer
       theme(panel.background = element_rect(fill = "white", 
-                                        color = NA)) 
+                                            color = NA)) 
 
-    girafe(
-      ggobj = ggir_all,
-      options = list(
-        opts_hover(css = "fill:cyan"),
-        opts_zoom(max = 10)
-        )
-    )
+    girafe(ggobj = ggir_all,
+           options = list(opts_hover(css = "fill:cyan"),
+                          opts_zoom(max = 10)))
       
     
   })
   
+  # Shiny session runs until you end it by closing pop up window
   session$onSessionEnded(function() {
     stopApp()
   })
