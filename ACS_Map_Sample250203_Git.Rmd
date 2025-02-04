@@ -1,0 +1,244 @@
+---
+title: "ACS Map Code Sample"
+author: "Cassandra T-Pederson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Purpose
+Create maps to visualize median household income across New York City using ACS data. 
+
+# Set-up
+
+## Packages
+```{r}
+# Loading packages
+library(dplyr)   # for data manipulation
+library(purrr)  # map list & other functions
+library(ggplot2) # for graphing
+library(sf)     # simple features - encoding spatial vector data
+library(svglite) # for exporting SVG files
+library(stringr) # text/string functions
+library(shiny) # interactive dashboard
+library(tidycensus) # tidyverse census functions
+library(tigris) # read census shapefiles
+
+library(leaflet) # interactive maps
+library(ggiraph) # interactive maps via ggplot2
+```
+
+## Census API key
+In order to access the Census API, you need to enter a Census API key, which you can request here: https://api.census.gov/data/key_signup.html 
+```{r}
+# Access the API by entering in your API key in quotes below just once per session
+Sys.setenv(CENSUS_API_KEY = "[INSERT YOUR KEY]")
+
+Sys.getenv("CENSUS_API_KEY") # Use command to return key confirming API is ready
+```
+
+# Load ACS Data
+Will use the 5-year estimate data from 2015 for median household income to start.
+
+## Output variable
+```{r}
+# Load variables from ACS5 2015 census and isolate the variable for median household income
+vacs15 <- load_variables(2015, "acs5", cache = T)
+
+# Confirm this is the correct outcome variable needed
+vacs15 %>% 
+  filter(str_detect(name, "B19113_001"))
+
+# Good - label confirms this is the correct variable	
+```
+
+## Income from ACS5 by Census Tract Table
+Load income data by tract and subset to the 5 NYC boroughs.
+```{r}
+incmedhh_2015 <- get_acs(geography = "tract",
+                             variables = c(incmedhh = "B19113_001"), 
+                             state = "NY",
+                             county = c("New York", 
+                                        "Kings", 
+                                        "Queens", 
+                                        "Bronx", 
+                                        "Richmond County"),
+                             year = 2015,
+                             geometry = T)
+
+# Preview df
+head(incmedhh_2015)
+```
+
+# Static map with ggplot2
+Get shapefile for NYC water layer. Will use as separate layer for map formatting.
+```{r}
+nyc_water <- area_water("NY", c("New York", 
+                                "Kings", 
+                                "Queens", 
+                                "Bronx", 
+                                "Richmond County"))
+```
+
+```{r}
+ggplot(incmedhh_2015) +
+  # income data
+  geom_sf(alpha = 1, 
+          color = NA, 
+          aes(fill = estimate)) +
+  # removes cartographic background grid & axis labels
+  theme_void() +
+  # legend
+  scale_fill_viridis_c(labels = scales::label_dollar(),
+                       name = "Median Household Income") + 
+  # remove water layer by setting color to white
+  geom_sf(data = nyc_water, 
+          fill = "white",
+          color = NA, 
+          aes(geometry = geometry)) +
+  # set background to white
+  theme(panel.background = element_rect(fill = "white", 
+                                        color = NA)) 
+```
+
+# Interactive maps
+Create interactive maps using leaflet and ggiraph
+
+## leaflet
+```{r}
+# set palette argument
+pal <- colorNumeric(
+  palette = "magma",
+  domain = incmedhh_2015$estimate
+)
+
+leaflet() %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>%  #can choose different base map types, but can run without
+  addPolygons(data = incmedhh_2015,
+              color = ~pal(estimate),
+              weight = 0.5,
+              smoothFactor = 0.2,
+              fillOpacity = 0.5,
+              label = ~estimate)
+```
+
+## ggiraph
+```{r}
+# add column to create hover over text
+incmedhh_2015_ggir <- incmedhh_2015 %>% 
+  mutate(tooltip = paste(NAME, estimate, sep = ": "))
+
+ggir <- ggplot(incmedhh_2015_ggir, aes(fill = estimate)) +
+  
+  # follow same set up as ggplot2 static map, but with interactive functions
+  geom_sf_interactive(aes(tooltip = tooltip, data_id = NAME), 
+                      size = 0.1) + 
+  scale_fill_viridis_c_interactive(option = "plasma",
+                                   labels = scales::label_dollar()) +
+  # color water layer white
+  geom_sf(data = nyc_water, 
+          fill = "white",
+          color = NA, 
+          aes(geometry = geometry)) +
+  labs(title = "Median Household Income by Census Tract",
+       caption = "Data source: 2015 5-year ACS, US Census Bureau",
+       fill = "ACS estimate") +
+  theme_void() +
+  # set background white to match water layer
+  theme(panel.background = element_rect(fill = "white", 
+                                        color = NA)) 
+
+girafe(ggobj = ggir) %>% 
+  # fill tract with color when cursor hovers over
+  girafe_options(opts_hover(css = "fill:cyan;"),
+                 opts_zoom(max = 10))
+```
+
+# Multi-year interactive map
+Create interactive map that uses data from multiple years from the ACS-5 survey
+```{r}
+years <- lst(2010, 2015, 2020)
+
+incmedhh_all <- map_dfr(
+  years,
+  ~ get_acs(
+    geography = "tract",
+    variables = "B19113_001",
+    state = "NY",
+    county = c("New York", "Kings", "Queens", "Bronx", "Richmond County"),
+    year = .x,
+    survey = "acs5",
+    geometry = T
+    ),
+  .id = "year"
+  ) %>% 
+  mutate(year = as.numeric(year))
+```
+
+## Shiny
+Create interactive dashboard with Shiny to look at multi-year data using ggiraph package
+```{r}
+incmedhh_all_ggir <- incmedhh_all %>% 
+  mutate(tooltip = paste(NAME, estimate, sep = ": "))
+```
+
+```{r}
+ui <- fluidPage(
+  sidebarLayout(
+    sidebarPanel = sidebarPanel(
+      selectInput(
+        'selected_year',
+        'Select a year to map',
+        choices = unique(incmedhh_all_ggir$year)
+      )
+    ),
+    mainPanel = mainPanel(
+      girafeOutput('girafe_output', height = 600)
+    )
+  )
+)
+      
+server <- function(input, output, session) {
+  
+  # Reactive function that filters by year based on input
+  dat_year <- reactive({incmedhh_all_ggir |> filter(year == input$selected_year)})
+  
+  output$girafe_output <- renderGirafe({
+    
+    ggir_all <- ggplot(data = dat_year(), aes(fill = estimate)) +
+      geom_sf_interactive(aes(tooltip = tooltip, data_id = NAME), 
+                         size = 0.1) +
+      scale_fill_viridis_c_interactive(option = "plasma",
+                                       labels = scales::label_dollar()) +
+      # color water layer white
+      geom_sf(data = nyc_water, 
+              fill = "white",
+              color = NA, 
+              aes(geometry = geometry)) +
+      labs(title = "Median Household Income by Census Tract",
+           caption = "Data source: 5-year ACS, US Census Bureau",
+           fill = "ACS estimate") +
+      theme_void() + 
+        # set background white to match water layer
+      theme(panel.background = element_rect(fill = "white", 
+                                        color = NA)) 
+
+    girafe(
+      ggobj = ggir_all,
+      options = list(
+        opts_hover(css = "fill:cyan"),
+        opts_zoom(max = 10)
+        )
+    )
+      
+    
+  })
+  
+  session$onSessionEnded(function() {
+    stopApp()
+  })
+  
+} 
+
+shinyApp(ui = ui, server = server)
+```
+
