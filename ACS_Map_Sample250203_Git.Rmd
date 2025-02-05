@@ -2,7 +2,14 @@
 title: "ACS Map Code Sample"
 author: "Cassandra T-Pederson"
 date: "`r Sys.Date()`"
-output: github_document
+knit: (function(input_file, encoding) {
+    out_dir <- 'docs';
+    rmarkdown::render(input_file,
+    encoding=encoding,
+    output_dir = file.path(dirname(input_file), out_dir),
+    output_file='index.html')
+                      })
+output: html_document
 ---
 
 # Purpose
