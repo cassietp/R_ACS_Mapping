@@ -54,7 +54,7 @@ census_api_key("[INSERT YOUR KEY]", install = TRUE)
 Sys.setenv(CENSUS_API_KEY = "[INSERT YOUR KEY]")
 ```
 
-```{r}
+```{r, eval = F}
 # After you have installed your key, it can be called any time by typing Sys.getenv("CENSUS_API_KEY") and can be used in package functions by simply typing CENSUS_API_KEY
 Sys.getenv("CENSUS_API_KEY")
 ```
