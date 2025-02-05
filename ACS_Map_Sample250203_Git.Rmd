@@ -9,6 +9,10 @@ output: html_document
 Create maps to visualize median household income across New York City using ACS data. 
 
 # Set-up
+Enable caching of data
+```{r}
+options(tigris_use_cache = TRUE)
+```
 
 ## Packages
 ```{r}
@@ -29,11 +33,17 @@ library(ggiraph) # interactive maps via ggplot2
 
 ## Census API key
 In order to access the Census API, you need to enter a Census API key, which you can request here: https://api.census.gov/data/key_signup.html 
-```{r}
-# Access the API by entering in your API key in quotes below just once per session
-Sys.setenv(CENSUS_API_KEY = "[INSERT YOUR KEY]")
+```{r, eval = F}
+# Use function to install your API key for future sessions. This will add your CENSUS API key to your .Renviron file so it can be called securely without being stored in your code. 
+census_api_key("[INSERT YOUR KEY]", install = TRUE)
 
-Sys.getenv("CENSUS_API_KEY") # Use command to return key confirming API is ready
+# Alternatively, access the API by entering in your API key in quotes below just once each session
+Sys.setenv(CENSUS_API_KEY = "[INSERT YOUR KEY]")
+```
+
+```{r, include = F, message = F, warning = F}
+# After you have installed your key, it can be called any time by typing Sys.getenv("CENSUS_API_KEY") and can be used in package functions by simply typing CENSUS_API_KEY
+Sys.getenv("CENSUS_API_KEY")
 ```
 
 # Load ACS Data
