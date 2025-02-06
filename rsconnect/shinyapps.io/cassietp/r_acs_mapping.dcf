@@ -1,0 +1,13 @@
+name: r_acs_mapping
+title:
+username: cassietp
+account: cassietp
+server: shinyapps.io
+envVars: CENSUS_API_KEY
+hostUrl: https://api.shinyapps.io/v1
+appId: 13920118
+bundleId:
+url: https://cassietp.shinyapps.io/r_acs_mapping/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
