@@ -15,6 +15,7 @@ output: html_document
 # Purpose
 Create maps to visualize median household income across New York City using ACS data. 
 
+
 # Set-up
 ```{r, echo = F}
 # Set markdown options
@@ -36,12 +37,10 @@ library(ggplot2) # for graphing
 library(sf)     # simple features - encoding spatial vector data
 library(svglite) # for exporting SVG files
 library(stringr) # text/string functions
-library(shiny) # interactive dashboard
 library(tidycensus) # tidyverse census functions
 library(tigris) # read census shapefiles
 library(leaflet) # interactive maps
 library(ggiraph) # interactive maps via ggplot2
-library(rsconnect) # deploy shiny app.io
 ```
 
 ## Census API key
@@ -190,103 +189,3 @@ girafe(ggobj = ggir) %>%
   girafe_options(opts_hover(css = "fill:cyan;"),
                  opts_zoom(max = 10))
 ```
-
-# Multi-year interactive map
-Create interactive map that uses data from multiple years from the ACS-5 survey
-```{r}
-# Save years of interest to list
-years <- lst(2010, 2015, 2020)
-
-# Run function to load census data across years in list
-incmedhh_all <- map_dfr(
-  years,
-  ~ get_acs(
-    geography = "tract",
-    variables = "B19113_001",
-    state = "NY",
-    county = c("New York", 
-               "Kings", 
-               "Queens", 
-               "Bronx", 
-               "Richmond County"),
-    year = .x,
-    survey = "acs5",
-    geometry = T
-    ),
-  .id = "year"
-  ) %>% 
-  mutate(year = as.numeric(year))
-```
-
-Create interactive dashboard with Shiny to look at multi-year data using ggiraph package
-```{r}
-# Create text column for hover over feature
-incmedhh_all_ggir <- incmedhh_all %>% 
-  mutate(tooltip = paste(NAME, estimate, sep = ": "))
-```
-
-```{r}
-# Shiny setup
-
-ui <- fluidPage(
-  # Create sidebar with dropdown menu to select year
-  sidebarLayout(
-    sidebarPanel = sidebarPanel(
-      selectInput(
-        'selected_year',
-        'Select a year to map',
-        choices = unique(incmedhh_all_ggir$year)
-      )
-    ),
-    mainPanel = mainPanel(
-      girafeOutput('girafe_output', height = 600)
-    )
-  )
-)
-      
-server <- function(input, output, session) {
-  
-  # Reactive function that filters by year based on input
-  dat_year <- reactive({incmedhh_all_ggir |> 
-      filter(year == input$selected_year)})
-  
-  output$girafe_output <- renderGirafe({
-    
-    # ggiraph/ggplot2 code (same setup as the previous sections)
-    ggir_all <- ggplot(data = dat_year(), 
-                       aes(fill = estimate)) +
-      geom_sf_interactive(aes(tooltip = tooltip, data_id = NAME), 
-                         size = 0.1) +
-      scale_fill_viridis_c_interactive(option = "plasma",
-                                       labels = scales::label_dollar()) +
-      # Color water layer white
-      geom_sf(data = nyc_water, 
-              fill = "white",
-              color = NA, 
-              aes(geometry = geometry)) +
-      labs(title = "Median Household Income by Census Tract",
-           caption = "Data source: 5-year ACS, US Census Bureau",
-           fill = "ACS estimate") +
-      # Theme removes cartographic background grid & axis labels
-      theme_void() + 
-        # Set background white to match water layer
-      theme(panel.background = element_rect(fill = "white", 
-                                            color = NA)) 
-
-    girafe(ggobj = ggir_all,
-           options = list(opts_hover(css = "fill:cyan"),
-                          opts_zoom(max = 10)))
-      
-    
-  })
-  
-  # Shiny session runs until you end it by closing pop up window
-  session$onSessionEnded(function() {
-    stopApp()
-  })
-  
-} 
-
-shinyApp(ui = ui, server = server)
-```
-
