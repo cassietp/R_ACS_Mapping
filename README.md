@@ -9,3 +9,7 @@ Key Packages:
 - leaflet
 - ggiraph
 
+Directory:
+- ACS_Map_Sample250203_Git.Rmd is the R Markdown file (without rendered output)
+- https://cassietp.github.io/R_ACS_Mapping/ is the Github Page that contains the code and full output (all map figures)
+  - docs folder contains the html file that was used to create the GitHub page
