@@ -39,9 +39,9 @@ library(stringr) # text/string functions
 library(shiny) # interactive dashboard
 library(tidycensus) # tidyverse census functions
 library(tigris) # read census shapefiles
-
 library(leaflet) # interactive maps
 library(ggiraph) # interactive maps via ggplot2
+library(rsconnect) # deploy shiny app.io
 ```
 
 ## Census API key
@@ -62,7 +62,6 @@ Sys.getenv("CENSUS_API_KEY")
 # Load ACS Data
 Will use the 5-year estimate data from 2015 for median household income to start.
 
-## Output variable
 ```{r}
 # Load variables from ACS5 2015 census and isolate the variable for median household income
 vacs15 <- load_variables(2015, "acs5", cache = T)
@@ -103,22 +102,24 @@ nyc_water <- area_water("NY", c("New York",
 ```
 
 Plot data using ggplot2
-```{r}
+```{r, fig.cap = "Figure 1: Static map with ggplot2"}
 ggplot(incmedhh_2015) +
   # Income data
   geom_sf(alpha = 1, 
           color = NA, 
           aes(fill = estimate)) +
-  # Theme removes cartographic background grid & axis labels
-  theme_void() +
   # Legend
-  scale_fill_viridis_c(labels = scales::label_dollar(),
-                       name = "Median Household Income") + 
+  scale_fill_viridis_c(labels = scales::label_dollar()) + 
   # Remove water layer by setting color to white
   geom_sf(data = nyc_water, 
           fill = "white",
           color = NA, 
           aes(geometry = geometry)) +
+  labs(title = "Median Household Income by New York City Census Tract",
+       caption = "Data Source: 2015 5-Year ACS, US Census Bureau",
+       fill = "ACS Estimate") +
+  # Theme removes cartographic background grid & axis labels
+  theme_void() +
   # Set background to white to match water layer
   theme(panel.background = element_rect(fill = "white", 
                                         color = NA)) 
@@ -128,7 +129,7 @@ ggplot(incmedhh_2015) +
 Create interactive maps using leaflet and ggiraph packages
 
 ## leaflet
-```{r}
+```{r, fig.cap = "Figure 2: Interactive map with leaflet"}
 # Set color palette argument
 pal <- colorNumeric(
   palette = "magma",
@@ -144,12 +145,19 @@ leaflet() %>%
               weight = 0.5,
               smoothFactor = 0.2,
               fillOpacity = 0.5,
-              label = ~estimate)
+              label = ~estimate) %>% 
+  # Add legend
+  addLegend(
+    position = "bottomright",
+    pal = pal,
+    values = incmedhh_2015$estimate,
+    title = "Median Household Income ($)"
+  )
 ```
 
 ## ggiraph
 ggiraph is a package that makes ggplot2 figures interactve. Use the basic code set up from the original static ggplot2 map for this section and edit as needed.
-```{r}
+```{r, fig.cap = "Figure 3: Interactive map with ggiraph"}
 # Create new df that has a text column combining each tract name and the income amount (i.e. "[TRACT NAME]: [$ AMOUNT]"). This will appear when cursor hovers over each tract
 incmedhh_2015_ggir <- incmedhh_2015 %>% 
   mutate(tooltip = paste(NAME, estimate, sep = ": "))
@@ -167,9 +175,9 @@ ggir <- ggplot(incmedhh_2015_ggir, aes(fill = estimate)) +
           fill = "white",
           color = NA, 
           aes(geometry = geometry)) +
-  labs(title = "Median Household Income by Census Tract",
-       caption = "Data source: 2015 5-year ACS, US Census Bureau",
-       fill = "ACS estimate") +
+  labs(title = "Median Household Income by New York City Census Tract",
+       caption = "Data Source: 2015 5-Year ACS, US Census Bureau",
+       fill = "ACS Estimate") +
   # Theme removes cartographic background grid & axis labels
   theme_void() +
   # Set background white to match water layer
@@ -210,7 +218,6 @@ incmedhh_all <- map_dfr(
   mutate(year = as.numeric(year))
 ```
 
-## Shiny
 Create interactive dashboard with Shiny to look at multi-year data using ggiraph package
 ```{r}
 # Create text column for hover over feature
